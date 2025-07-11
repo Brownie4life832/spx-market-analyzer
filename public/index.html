@@ -74,7 +74,7 @@
             statusEl.textContent = 'Fetching latest analysis...';
             
             try {
-                const response = await fetch('/api/analyze');
+                const response = await fetch('/api/analyze_with_ai');
                 const data = await response.json();
                 
                 if (data.success) {
