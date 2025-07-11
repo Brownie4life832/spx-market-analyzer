@@ -26,6 +26,7 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 'success': True,
                 'timestamp': datetime.now().isoformat(),
+                'est_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'data_fetched': {
                     'heatmap': market_data.get('heatmap_status', False),
                     'breakdown_strike': market_data.get('strike_status', False),
@@ -33,6 +34,7 @@ class handler(BaseHTTPRequestHandler):
                     'depthview': market_data.get('depth_status', False),
                     'timeslots': market_data.get('slots_status', False)
                 },
+                'errors': market_data.get('errors', []),
                 'analysis': analysis
             }
             
@@ -52,11 +54,11 @@ class handler(BaseHTTPRequestHandler):
         
         all_data = {
             'fetch_date': current_date,
-            'fetch_time': current_datetime
+            'fetch_time': current_datetime,
+            'errors': []
         }
         
         # 1. HEATMAP API - Get both Gamma and Charm
-        print("Fetching heatmap data...")
         for heatmap_type in ['gamma', 'charm']:
             try:
                 url = "https://api.optionsdepth.com/options-depth-api/v1/heatmap/"
@@ -75,10 +77,9 @@ class handler(BaseHTTPRequestHandler):
                 all_data[f'heatmap_{heatmap_type}'] = data
                 all_data['heatmap_status'] = True
             except Exception as e:
-                all_data[f'heatmap_{heatmap_type}_error'] = str(e)
+                all_data['errors'].append(f"Heatmap {heatmap_type}: {str(e)}")
         
         # 2. BREAKDOWN BY STRIKE API
-        print("Fetching breakdown by strike...")
         try:
             url = "https://api.optionsdepth.com/options-depth-api/v1/breakdown-by-strike/"
             params = {
@@ -103,10 +104,9 @@ class handler(BaseHTTPRequestHandler):
             all_data['breakdown_by_strike'] = json.loads(response.read().decode('utf-8'))
             all_data['strike_status'] = True
         except Exception as e:
-            all_data['breakdown_strike_error'] = str(e)
+            all_data['errors'].append(f"Breakdown Strike: {str(e)}")
         
         # 3. BREAKDOWN BY EXPIRATION API
-        print("Fetching breakdown by expiration...")
         try:
             url = "https://api.optionsdepth.com/options-depth-api/v1/breakdown-by-expiration/"
             params = {
@@ -133,10 +133,9 @@ class handler(BaseHTTPRequestHandler):
             all_data['breakdown_by_expiration'] = json.loads(response.read().decode('utf-8'))
             all_data['exp_status'] = True
         except Exception as e:
-            all_data['breakdown_exp_error'] = str(e)
+            all_data['errors'].append(f"Breakdown Expiration: {str(e)}")
         
         # 4. DEPTHVIEW API
-        print("Fetching depthview...")
         try:
             url = "https://api.optionsdepth.com/options-depth-api/v1/depthview/"
             params = {
@@ -160,10 +159,9 @@ class handler(BaseHTTPRequestHandler):
             all_data['depthview'] = json.loads(response.read().decode('utf-8'))
             all_data['depth_status'] = True
         except Exception as e:
-            all_data['depthview_error'] = str(e)
+            all_data['errors'].append(f"Depthview: {str(e)}")
         
         # 5. INTRADAY TIMESLOTS API
-        print("Fetching intraday timeslots...")
         try:
             url = "https://api.optionsdepth.com/options-depth-api/v1/intraday-timeslots/"
             params = {
@@ -177,87 +175,79 @@ class handler(BaseHTTPRequestHandler):
             all_data['intraday_timeslots'] = json.loads(response.read().decode('utf-8'))
             all_data['slots_status'] = True
         except Exception as e:
-            all_data['timeslots_error'] = str(e)
+            all_data['errors'].append(f"Timeslots: {str(e)}")
         
         return all_data
     
     def generate_options_analysis(self, market_data, api_key):
         """Generate analysis based purely on options data patterns"""
         try:
+            # Safely handle timeslots data
+            timeslots_data = market_data.get('intraday_timeslots', [])
+            if isinstance(timeslots_data, list) and len(timeslots_data) > 0:
+                recent_slots = timeslots_data[-5:] if len(timeslots_data) >= 5 else timeslots_data
+            else:
+                recent_slots = "No timeslot data available"
+            
             # Build comprehensive data summary
             data_summary = f"""
             OPTIONS DATA ANALYSIS REQUEST
             
             Data Collection Time: {market_data.get('fetch_time', 'Unknown')}
+            Successful Endpoints: {sum([market_data.get(f'{x}_status', False) for x in ['heatmap', 'strike', 'exp', 'depth', 'slots']])} out of 5
             
-            Available Data Sources:
+            Available Data:
             - Gamma Heatmap: {'✓' if market_data.get('heatmap_gamma') else '✗'}
             - Charm Heatmap: {'✓' if market_data.get('heatmap_charm') else '✗'}
             - Strike Breakdown: {'✓' if market_data.get('breakdown_by_strike') else '✗'}
             - Expiration Breakdown: {'✓' if market_data.get('breakdown_by_expiration') else '✗'}
             - Market Depth: {'✓' if market_data.get('depthview') else '✗'}
-            - Timeslots: {'✓' if market_data.get('intraday_timeslots') else '✗'}
             
-            1. GAMMA HEATMAP DATA:
-            {json.dumps(market_data.get('heatmap_gamma', {}), indent=2)[:1000]}
-            
-            2. CHARM HEATMAP DATA:
-            {json.dumps(market_data.get('heatmap_charm', {}), indent=2)[:1000]}
-            
-            3. STRIKE BREAKDOWN:
-            {json.dumps(market_data.get('breakdown_by_strike', {}), indent=2)[:1000]}
-            
-            4. EXPIRATION BREAKDOWN:
-            {json.dumps(market_data.get('breakdown_by_expiration', {}), indent=2)[:1000]}
-            
-            5. MARKET DEPTH VIEW:
-            {json.dumps(market_data.get('depthview', {}), indent=2)[:1000]}
-            
-            6. AVAILABLE TIMESLOTS:
-            {json.dumps(market_data.get('intraday_timeslots', [])[-5:], indent=2)}
+            API Errors: {', '.join(market_data.get('errors', [])) if market_data.get('errors') else 'None'}
             """
             
+            # Add available data to summary
+            if market_data.get('heatmap_gamma'):
+                data_summary += f"\n\n1. GAMMA HEATMAP DATA:\n{json.dumps(market_data.get('heatmap_gamma'), indent=2)[:800]}"
+            
+            if market_data.get('heatmap_charm'):
+                data_summary += f"\n\n2. CHARM HEATMAP DATA:\n{json.dumps(market_data.get('heatmap_charm'), indent=2)[:800]}"
+            
+            if market_data.get('breakdown_by_strike'):
+                data_summary += f"\n\n3. STRIKE BREAKDOWN:\n{json.dumps(market_data.get('breakdown_by_strike'), indent=2)[:800]}"
+            
+            if market_data.get('breakdown_by_expiration'):
+                data_summary += f"\n\n4. EXPIRATION BREAKDOWN:\n{json.dumps(market_data.get('breakdown_by_expiration'), indent=2)[:800]}"
+            
+            if market_data.get('depthview'):
+                data_summary += f"\n\n5. MARKET DEPTH:\n{json.dumps(market_data.get('depthview'), indent=2)[:800]}"
+            
             prompt = f"""
-            Analyze this SPX options market data. DO NOT reference current SPX price. 
-            Focus ONLY on what the options data reveals about market positioning and flows.
+            Analyze the available SPX options market data. Focus ONLY on what the options data reveals.
             
             {data_summary}
             
-            Please provide analysis of:
+            Based on the AVAILABLE data, please provide analysis of:
             
-            1. **GAMMA POSITIONING**
-               - Net gamma exposure levels and concentrations
-               - Key gamma strikes that may act as magnets/barriers
-               - Positive vs negative gamma zones
+            1. **OPTIONS POSITIONING INSIGHTS**
+               - What the available data shows about market positioning
+               - Key strikes or levels revealed in the data
+               - Any notable patterns or concentrations
             
-            2. **CHARM FLOW ANALYSIS**
-               - Time decay impacts across strikes
-               - Charm flip points and their significance
-               - How positioning changes with time decay
+            2. **DEALER/MARKET MAKER IMPLICATIONS**
+               - What can be inferred about dealer positioning
+               - Potential hedging flows or pressures
             
-            3. **STRIKE & EXPIRATION INSIGHTS**
-               - Most heavily traded strikes and what they indicate
-               - Put/Call positioning imbalances
-               - Expiration concentrations and roll effects
+            3. **TIME DECAY & FLOWS**
+               - If charm data available, analyze time decay impacts
+               - Options flow patterns visible in the data
             
-            4. **MARKET MAKER POSITIONING**
-               - Net dealer exposure and hedging needs
-               - Levels where dealers are long/short gamma
-               - Potential pinning or acceleration zones
+            4. **KEY LEVELS & EXPECTATIONS**
+               - Important strikes based on the data
+               - What the options market structure suggests
             
-            5. **FLOW PATTERNS & SIGNALS**
-               - Unusual activity or positioning changes
-               - Directional bias from options flows
-               - Support/resistance implied by options
-            
-            6. **NEXT 10-30 MIN EXPECTATIONS**
-               - Based purely on options positioning
-               - Key levels that may attract price
-               - Potential for squeeze or pinning
-            
-            Focus on actionable insights from the options data patterns. 
-            Be specific about strike levels and their importance.
-            DO NOT mention or guess at current SPX price.
+            Note: Work with whatever data is available. If some endpoints failed, focus your analysis on the successful data points.
+            Be specific about what you can determine from the available data.
             """
             
             # Call Anthropic API
@@ -271,7 +261,7 @@ class handler(BaseHTTPRequestHandler):
             
             data = json.dumps({
                 "model": "claude-3-haiku-20240307",
-                "max_tokens": 1500,
+                "max_tokens": 1200,
                 "temperature": 0.3,
                 "messages": [{
                     "role": "user",
@@ -286,4 +276,12 @@ class handler(BaseHTTPRequestHandler):
             return result['content'][0]['text']
             
         except Exception as e:
-            return f"Analysis Error: {str(e)}\n\nData Summary: Successfully fetched data from {sum([market_data.get(f'{x}_status', False) for x in ['heatmap', 'strike', 'exp', 'depth', 'slots']])} out of 5 endpoints."
+            error_summary = f"""
+            Analysis Error: {str(e)}
+            
+            Data Summary: Successfully fetched data from {sum([market_data.get(f'{x}_status', False) for x in ['heatmap', 'strike', 'exp', 'depth', 'slots']])} out of 5 endpoints.
+            
+            Errors encountered:
+            {chr(10).join(market_data.get('errors', [])) if market_data.get('errors') else 'No specific errors logged'}
+            """
+            return error_summary
