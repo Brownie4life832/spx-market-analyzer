@@ -197,20 +197,30 @@
     <script>
         let autoRefreshInterval;
         
-        function checkMarketStatus() {
-            const now = new Date();
-            const easternTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-            const hours = easternTime.getHours();
-            const minutes = easternTime.getMinutes();
-            const day = easternTime.getDay();
-            
-            const marketStatusEl = document.getElementById('marketStatus');
-            
-            // Check if weekend
-            if (day === 0 || day === 6) {
-                marketStatusEl.innerHTML = '<span class="market-closed">🔴 Market Closed (Weekend)</span>';
-                return false;
-            }
+       if (data.success) {
+    statusEl.className = 'status success';
+    statusEl.textContent = '✅ Analysis updated successfully';
+    
+    // Use the EST time from the backend
+    let dataTimestamp = data.est_time || 'Unknown';
+    let spotPrice = data.spot_price || 'Unknown';
+    
+    analysisEl.innerHTML = `
+        <div class="data-info">
+            <strong>SPX Price:</strong> ${spotPrice}<br>
+            <strong>Data Time:</strong> ${dataTimestamp}<br>
+            <strong>Analysis Generated:</strong> ${new Date().toLocaleTimeString('en-US', {
+                timeZone: 'America/New_York',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            })} EST
+        </div>
+        <div class="analysis-content">${data.analysis}</div>
+    `;
+    
+    timeEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+}
             
             // Check market hours (9:30 AM - 4:00 PM EST)
             const marketOpen = hours > 9 || (hours === 9 && minutes >= 30);
