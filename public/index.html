@@ -191,10 +191,19 @@
                     });
                     lastUpdateEl.textContent = updateTime;
                     
-                    // Show data timestamp if available
-                    if (data.timestamp) {
-                        const dataTime = new Date(data.timestamp);
-                        dataDateEl.textContent = dataTime.toLocaleDateString();
+                    // Show data timestamp and debug info
+if (data.timestamp) {
+    const dataTime = new Date(data.timestamp);
+    dataDateEl.textContent = dataTime.toLocaleDateString();
+}
+
+// Show debug info if available
+if (data.debug_info) {
+    console.log('Debug Info:', data.debug_info);
+    if (data.debug_info.successful_date) {
+        dataDateEl.textContent = data.debug_info.successful_date;
+    }
+}
                     }
                 } else {
                     statusEl.className = 'status error';
