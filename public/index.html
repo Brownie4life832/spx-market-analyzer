@@ -2,176 +2,236 @@
 <html>
 <head>
     <title>SPX Market Analyzer</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
-            background: #f5f5f5;
+            background: #0a0a0a;
+            color: #ffffff;
         }
+        
         h1 {
-            color: #333;
+            color: #ffffff;
             text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 10px;
         }
-        .datetime-display {
+        
+        .subtitle {
             text-align: center;
-            font-size: 18px;
-            color: #0066cc;
-            margin: 10px 0;
-            padding: 10px;
-            background: white;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
         }
+        
         .status {
             text-align: center;
-            padding: 10px;
-            margin: 20px 0;
-            border-radius: 5px;
+            padding: 12px 24px;
+            margin: 20px auto;
+            border-radius: 25px;
+            font-weight: 500;
+            display: inline-block;
+            width: auto;
         }
-        .loading { background: #ffeaa7; }
-        .success { background: #55efc4; }
-        .error { background: #ff7675; color: white; }
+        
+        .status-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .loading { 
+            background: #ffa500;
+            color: #000;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .success { 
+            background: #00ff88;
+            color: #000;
+        }
+        
+        .error { 
+            background: #ff3b3b;
+            color: white;
+        }
+        
         button {
             display: block;
             margin: 20px auto;
-            padding: 10px 30px;
+            padding: 14px 32px;
             font-size: 16px;
-            background: #0984e3;
+            font-weight: 500;
+            background: #1d4ed8;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
+            transition: all 0.3s ease;
         }
-        button:hover { background: #74b9ff; }
+        
+        button:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(29, 78, 216, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
         .analysis {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: #1a1a1a;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             margin: 20px 0;
-            white-space: pre-wrap;
-            line-height: 1.6;
+            border: 1px solid #333;
+            min-height: 300px;
         }
+        
+        .analysis-content {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.8;
+            font-size: 15px;
+            color: #e0e0e0;
+        }
+        
+        .data-info {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: #8b949e;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+        
+        .data-info strong {
+            color: #58a6ff;
+        }
+        
         .time {
             text-align: center;
             color: #666;
             margin: 10px 0;
+            font-size: 14px;
         }
-        .market-info {
-            display: flex;
-            justify-content: space-around;
-            margin: 20px 0;
-            gap: 20px;
-        }
-        .info-box {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        
+        .footer {
             text-align: center;
-            flex: 1;
-        }
-        .info-label {
-            font-size: 12px;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
             color: #666;
-            text-transform: uppercase;
+            font-size: 13px;
         }
-        .info-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-            margin-top: 5px;
+        
+        .market-status {
+            text-align: center;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        
+        .market-open {
+            color: #00ff88;
+        }
+        
+        .market-closed {
+            color: #ff6b6b;
+        }
+        
+        .loading-spinner {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+        
+        .error-message {
+            background: #2d1f1f;
+            border: 1px solid #ff3b3b;
+            color: #ff6b6b;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 20px 0;
         }
     </style>
 </head>
 <body>
     <h1>🎯 SPX Options Market Analyzer</h1>
+    <div class="subtitle">Real-time options flow analysis powered by AI</div>
     
-    <div class="datetime-display" id="currentDateTime">
-        Loading current time...
+    <div class="market-status" id="marketStatus"></div>
+    
+    <div class="status-container">
+        <div id="status" class="status loading">Initializing...</div>
     </div>
-    
-    <div class="market-info">
-        <div class="info-box">
-            <div class="info-label">Market Status</div>
-            <div class="info-value" id="marketStatus">Checking...</div>
-        </div>
-        <div class="info-box">
-            <div class="info-label">Data Date</div>
-            <div class="info-value" id="dataDate">-</div>
-        </div>
-        <div class="info-box">
-            <div class="info-label">Last Update</div>
-            <div class="info-value" id="lastUpdate">Never</div>
-        </div>
-    </div>
-    
-    <div id="status" class="status loading">Loading...</div>
     
     <button onclick="fetchAnalysis()">🔄 Refresh Analysis</button>
     
+    <div class="time" id="time"></div>
+    
     <div id="analysis" class="analysis">
-        Fetching market analysis...
+        <div class="loading-spinner">
+            Loading market analysis...<br>
+            <small>This may take a few moments</small>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>Auto-refreshes every 10 minutes during market hours (9:30 AM - 4:00 PM EST)</p>
+        <p>Data provided by OptionsDepth • Analysis by Claude AI</p>
     </div>
     
     <script>
-        // Update current time every second
-        function updateDateTime() {
+        let autoRefreshInterval;
+        
+        function checkMarketStatus() {
             const now = new Date();
-            const options = {
-                timeZone: 'America/New_York',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
-            };
-            
-            const estTime = now.toLocaleString('en-US', options);
-            document.getElementById('currentDateTime').innerHTML = 
-                `Current Time (EST): <strong>${estTime}</strong>`;
-            
-            // Check if market is open (Monday-Friday, 9:30 AM - 4:00 PM EST)
-            const estHour = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"})).getHours();
-            const estMinutes = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"})).getMinutes();
-            const estDay = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"})).getDay();
-            
-            const marketTime = estHour + (estMinutes / 60);
-            const isWeekday = estDay >= 1 && estDay <= 5;
-            const isDuringMarket = marketTime >= 9.5 && marketTime < 16;
+            const easternTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+            const hours = easternTime.getHours();
+            const minutes = easternTime.getMinutes();
+            const day = easternTime.getDay();
             
             const marketStatusEl = document.getElementById('marketStatus');
-            if (isWeekday && isDuringMarket) {
-                marketStatusEl.textContent = '🟢 OPEN';
-                marketStatusEl.style.color = '#00a652';
-            } else if (isWeekday && marketTime >= 8 && marketTime < 9.5) {
-                marketStatusEl.textContent = '🟡 PRE-MARKET';
-                marketStatusEl.style.color = '#ff9500';
-            } else if (isWeekday && marketTime >= 16 && marketTime < 20) {
-                marketStatusEl.textContent = '🟡 AFTER-HOURS';
-                marketStatusEl.style.color = '#ff9500';
+            
+            // Check if weekend
+            if (day === 0 || day === 6) {
+                marketStatusEl.innerHTML = '<span class="market-closed">🔴 Market Closed (Weekend)</span>';
+                return false;
+            }
+            
+            // Check market hours (9:30 AM - 4:00 PM EST)
+            const marketOpen = hours > 9 || (hours === 9 && minutes >= 30);
+            const marketClose = hours < 16;
+            
+            if (marketOpen && marketClose) {
+                marketStatusEl.innerHTML = '<span class="market-open">🟢 Market Open</span>';
+                return true;
             } else {
-                marketStatusEl.textContent = '🔴 CLOSED';
-                marketStatusEl.style.color = '#dc3545';
+                marketStatusEl.innerHTML = '<span class="market-closed">🔴 Market Closed</span>';
+                return false;
             }
         }
-        
-        // Update time immediately and then every second
-        updateDateTime();
-        setInterval(updateDateTime, 1000);
         
         async function fetchAnalysis() {
             const statusEl = document.getElementById('status');
             const analysisEl = document.getElementById('analysis');
-            const lastUpdateEl = document.getElementById('lastUpdate');
-            const dataDateEl = document.getElementById('dataDate');
+            const timeEl = document.getElementById('time');
             
             statusEl.className = 'status loading';
-            statusEl.textContent = 'Fetching latest analysis...';
+            statusEl.textContent = 'Fetching latest market data...';
             
             try {
                 const response = await fetch('/api/analyze');
@@ -180,61 +240,81 @@
                 if (data.success) {
                     statusEl.className = 'status success';
                     statusEl.textContent = '✅ Analysis updated successfully';
-                    analysisEl.textContent = data.analysis;
                     
-                    // Update last update time
-                    const updateTime = new Date().toLocaleTimeString('en-US', {
-                        timeZone: 'America/New_York',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
-                    });
-                    lastUpdateEl.textContent = updateTime;
-                    
-                    // Show data timestamp and debug info
-if (data.timestamp) {
-    const dataTime = new Date(data.timestamp);
-    dataDateEl.textContent = dataTime.toLocaleDateString();
-}
-
-// Show debug info if available
-if (data.debug_info) {
-    console.log('Debug Info:', data.debug_info);
-    if (data.debug_info.successful_date) {
-        dataDateEl.textContent = data.debug_info.successful_date;
-    }
-}
+                    // Format the data timestamp if available
+                    let dataTimestamp = 'Unknown';
+                    if (data.data_timestamp) {
+                        const dt = new Date(data.data_timestamp);
+                        dataTimestamp = dt.toLocaleTimeString('en-US', { 
+                            timeZone: 'America/New_York',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                        }) + ' EST';
                     }
+                    
+                    analysisEl.innerHTML = `
+                        <div class="data-info">
+                            <strong>Data Fetched:</strong> ${dataTimestamp}<br>
+                            <strong>Analysis Generated:</strong> ${new Date().toLocaleTimeString('en-US', {
+                                timeZone: 'America/New_York',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                            })} EST
+                        </div>
+                        <div class="analysis-content">${data.analysis}</div>
+                    `;
+                    
+                    timeEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
                 } else {
                     statusEl.className = 'status error';
-                    statusEl.textContent = '❌ Error: ' + data.error;
-                    analysisEl.textContent = 'Error details:\n' + JSON.stringify(data, null, 2);
+                    statusEl.textContent = '❌ Error: ' + (data.error || 'Unknown error');
+                    
+                    analysisEl.innerHTML = `
+                        <div class="error-message">
+                            <strong>Error:</strong> ${data.error || 'Failed to fetch analysis'}<br>
+                            <small>Please try again or check the console for details.</small>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 statusEl.className = 'status error';
-                statusEl.textContent = '❌ Failed to connect';
-                analysisEl.textContent = 'Error: ' + error.message;
+                statusEl.textContent = '❌ Connection failed';
+                
+                analysisEl.innerHTML = `
+                    <div class="error-message">
+                        <strong>Connection Error:</strong> ${error.message}<br>
+                        <small>Please check your internet connection and try again.</small>
+                    </div>
+                `;
+                
+                console.error('Fetch error:', error);
             }
         }
         
-        // Fetch on load
-        fetchAnalysis();
-        
-        // Auto-refresh every 10 minutes
-        setInterval(fetchAnalysis, 600000);
-        
-        // Add countdown to next refresh
-        let secondsUntilRefresh = 600;
-        setInterval(() => {
-            secondsUntilRefresh--;
-            if (secondsUntilRefresh <= 0) {
-                secondsUntilRefresh = 600;
+        function setupAutoRefresh() {
+            // Clear any existing interval
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
             }
-            const minutes = Math.floor(secondsUntilRefresh / 60);
-            const seconds = secondsUntilRefresh % 60;
-            document.getElementById('status').title = 
-                `Next auto-refresh in ${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }, 1000);
+            
+            // Set up auto-refresh every 10 minutes
+            autoRefreshInterval = setInterval(() => {
+                if (checkMarketStatus()) {
+                    console.log('Auto-refreshing...');
+                    fetchAnalysis();
+                }
+            }, 600000); // 10 minutes
+        }
+        
+        // Initialize
+        checkMarketStatus();
+        fetchAnalysis();
+        setupAutoRefresh();
+        
+        // Update market status every minute
+        setInterval(checkMarketStatus, 60000);
     </script>
 </body>
 </html>
