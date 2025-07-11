@@ -1,7 +1,7 @@
 from http.server import BaseHTTPRequestHandler
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 import urllib.request
 import urllib.parse
 
@@ -17,16 +17,15 @@ class handler(BaseHTTPRequestHandler):
             ANTHROPIC_KEY = os.environ.get('ANTHROPIC_API_KEY')
             OPTIONS_KEY = os.environ.get('OPTIONSDEPTH_API_KEY')
             
-            # Fetch data from ALL 5 endpoints
+            # Fetch whatever data is available from the APIs
             market_data = self.fetch_all_optionsdepth_data(OPTIONS_KEY)
             
-            # Generate analysis based on options data patterns
+            # Generate analysis based on whatever data we got
             analysis = self.generate_options_analysis(market_data, ANTHROPIC_KEY)
             
             response = {
                 'success': True,
                 'timestamp': datetime.now().isoformat(),
-                'est_time': market_data.get('actual_fetch_time', 'Unknown'),
                 'data_fetched': {
                     'heatmap': market_data.get('heatmap_status', False),
                     'breakdown_strike': market_data.get('strike_status', False),
@@ -35,7 +34,7 @@ class handler(BaseHTTPRequestHandler):
                     'timeslots': market_data.get('slots_status', False)
                 },
                 'errors': market_data.get('errors', []),
-                'debug_info': market_data.get('debug_info', {}),
+                'api_info': market_data.get('api_info', {}),
                 'analysis': analysis
             }
             
@@ -49,116 +48,55 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(response).encode())
     
     def fetch_all_optionsdepth_data(self, api_key):
-        """Fetch data from ALL 5 OptionDepth endpoints"""
-        # Get current date - July 11, 2025
-        now = datetime.now()
-        
-        # For options data, if it's weekend, use Friday's date
-        if now.weekday() == 5:  # Saturday
-            current_date = (now - timedelta(days=1)).strftime("%Y-%m-%d")
-        elif now.weekday() == 6:  # Sunday  
-            current_date = (now - timedelta(days=2)).strftime("%Y-%m-%d")
-        else:
-            current_date = now.strftime("%Y-%m-%d")
-        
-        current_datetime = now.strftime("%Y-%m-%dT%H:%M:%S")
-        
-        # Since we're in 2025, let's also try yesterday's date in case the API doesn't have today's data yet
-        yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        """Fetch whatever data is available from OptionDepth endpoints"""
+        # We'll use today's date for the request, but we don't care what date the data is actually from
+        request_date = datetime.now().strftime("%Y-%m-%d")
+        request_datetime = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         
         all_data = {
-            'fetch_date': current_date,
-            'fetch_time': current_datetime,
-            'actual_fetch_time': now.strftime("%Y-%m-%d %H:%M:%S"),
             'errors': [],
-            'debug_info': {
-                'requested_date': current_date,
-                'yesterday_date': yesterday,
-                'current_time': current_datetime,
-                'weekday': now.strftime("%A"),
-                'year': now.year
+            'api_info': {
+                'request_made_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'data_dates': {}  # Will store what dates the API actually returns
             }
         }
         
-        # Try to determine which date has data available
-        test_date = current_date
-        
-        # 1. First, try INTRADAY TIMESLOTS to see what dates have data
-        try:
-            url = "https://api.optionsdepth.com/options-depth-api/v1/intraday-timeslots/"
-            
-            # Try today first
-            params = {
-                "date": current_date,
-                "key": api_key
-            }
-            
-            full_url = url + "?" + urllib.parse.urlencode(params)
-            req = urllib.request.Request(full_url)
-            response = urllib.request.urlopen(req, timeout=10)
-            timeslots_data = json.loads(response.read().decode('utf-8'))
-            
-            if timeslots_data and isinstance(timeslots_data, list) and len(timeslots_data) > 0:
-                all_data['intraday_timeslots'] = timeslots_data
-                all_data['slots_status'] = True
-                all_data['latest_timeslot'] = timeslots_data[-1]
-                test_date = current_date  # Today has data
-            else:
-                raise Exception("No timeslots for today")
-                
-        except:
-            # Try yesterday
-            try:
-                params = {
-                    "date": yesterday,
-                    "key": api_key
-                }
-                
-                full_url = url + "?" + urllib.parse.urlencode(params)
-                req = urllib.request.Request(full_url)
-                response = urllib.request.urlopen(req, timeout=10)
-                timeslots_data = json.loads(response.read().decode('utf-8'))
-                
-                if timeslots_data and isinstance(timeslots_data, list) and len(timeslots_data) > 0:
-                    all_data['intraday_timeslots'] = timeslots_data
-                    all_data['slots_status'] = True
-                    all_data['latest_timeslot'] = timeslots_data[-1]
-                    test_date = yesterday  # Yesterday has data
-                    all_data['debug_info']['using_date'] = yesterday
-                    all_data['errors'].append(f"Note: Using yesterday's data ({yesterday}) as today's data not yet available")
-            except Exception as e:
-                all_data['errors'].append(f"Timeslots: {str(e)}")
-        
-        # Now use the date that has data for other endpoints
-        all_data['fetch_date'] = test_date
-        
-        # 2. HEATMAP API - Get both Gamma and Charm
+        # 1. HEATMAP API - Get both Gamma and Charm
         for heatmap_type in ['gamma', 'charm']:
             try:
                 url = "https://api.optionsdepth.com/options-depth-api/v1/heatmap/"
                 params = {
                     "model": "daily",
                     "ticker": "SPX",
-                    "date": test_date,
+                    "date": request_date,
                     "type": heatmap_type,
                     "key": api_key
                 }
                 
                 full_url = url + "?" + urllib.parse.urlencode(params)
-                
                 req = urllib.request.Request(full_url)
                 response = urllib.request.urlopen(req, timeout=15)
                 data = json.loads(response.read().decode('utf-8'))
+                
                 all_data[f'heatmap_{heatmap_type}'] = data
                 all_data['heatmap_status'] = True
+                
+                # Try to extract what date this data is actually for
+                if data and isinstance(data, dict):
+                    # Look for date info in the response
+                    for key in ['date', 'data_date', 'as_of_date', 'timestamp']:
+                        if key in data:
+                            all_data['api_info']['data_dates'][f'heatmap_{heatmap_type}'] = data[key]
+                            break
+                            
             except Exception as e:
                 all_data['errors'].append(f"Heatmap {heatmap_type}: {str(e)}")
         
-        # 3. BREAKDOWN BY STRIKE API
+        # 2. BREAKDOWN BY STRIKE API
         try:
             url = "https://api.optionsdepth.com/options-depth-api/v1/breakdown-by-strike/"
             params = {
-                "date": test_date,
+                "date": request_date,
                 "ticker": "SPX",
                 "mode": "net",
                 "model": "daily",
@@ -171,19 +109,21 @@ class handler(BaseHTTPRequestHandler):
             }
             
             full_url = url + "?" + urllib.parse.urlencode(params)
-            
             req = urllib.request.Request(full_url)
             response = urllib.request.urlopen(req, timeout=15)
-            all_data['breakdown_by_strike'] = json.loads(response.read().decode('utf-8'))
+            data = json.loads(response.read().decode('utf-8'))
+            
+            all_data['breakdown_by_strike'] = data
             all_data['strike_status'] = True
+            
         except Exception as e:
             all_data['errors'].append(f"Breakdown Strike: {str(e)}")
         
-        # 4. BREAKDOWN BY EXPIRATION API
+        # 3. BREAKDOWN BY EXPIRATION API
         try:
             url = "https://api.optionsdepth.com/options-depth-api/v1/breakdown-by-expiration/"
             params = {
-                "date": test_date,
+                "date": request_date,
                 "ticker": "SPX",
                 "mode": "net",
                 "model": "daily",
@@ -195,19 +135,21 @@ class handler(BaseHTTPRequestHandler):
             }
             
             full_url = url + "?" + urllib.parse.urlencode(params)
-            
             req = urllib.request.Request(full_url)
             response = urllib.request.urlopen(req, timeout=15)
-            all_data['breakdown_by_expiration'] = json.loads(response.read().decode('utf-8'))
+            data = json.loads(response.read().decode('utf-8'))
+            
+            all_data['breakdown_by_expiration'] = data
             all_data['exp_status'] = True
+            
         except Exception as e:
             all_data['errors'].append(f"Breakdown Expiration: {str(e)}")
         
-        # 5. DEPTHVIEW API
+        # 4. DEPTHVIEW API
         try:
             url = "https://api.optionsdepth.com/options-depth-api/v1/depthview/"
             params = {
-                "date": test_date,
+                "date": request_date,
                 "ticker": "SPX",
                 "mode": "net",
                 "model": "daily",
@@ -219,35 +161,55 @@ class handler(BaseHTTPRequestHandler):
             }
             
             full_url = url + "?" + urllib.parse.urlencode(params)
-            
             req = urllib.request.Request(full_url)
             response = urllib.request.urlopen(req, timeout=15)
-            all_data['depthview'] = json.loads(response.read().decode('utf-8'))
+            data = json.loads(response.read().decode('utf-8'))
+            
+            all_data['depthview'] = data
             all_data['depth_status'] = True
+            
         except Exception as e:
             all_data['errors'].append(f"Depthview: {str(e)}")
+        
+        # 5. INTRADAY TIMESLOTS API
+        try:
+            url = "https://api.optionsdepth.com/options-depth-api/v1/intraday-timeslots/"
+            params = {
+                "date": request_date,
+                "key": api_key
+            }
+            
+            full_url = url + "?" + urllib.parse.urlencode(params)
+            req = urllib.request.Request(full_url)
+            response = urllib.request.urlopen(req, timeout=15)
+            timeslots_data = json.loads(response.read().decode('utf-8'))
+            
+            all_data['intraday_timeslots'] = timeslots_data
+            all_data['slots_status'] = True
+            
+            # Get the latest timeslot
+            if isinstance(timeslots_data, list) and len(timeslots_data) > 0:
+                all_data['latest_timeslot'] = timeslots_data[-1]
+                all_data['api_info']['latest_data_point'] = timeslots_data[-1]
+                
+        except Exception as e:
+            all_data['errors'].append(f"Timeslots: {str(e)}")
         
         return all_data
     
     def generate_options_analysis(self, market_data, api_key):
-        """Generate analysis based purely on options data patterns"""
+        """Generate analysis based on whatever data is available"""
         try:
-            # Safely handle timeslots data
-            timeslots_data = market_data.get('intraday_timeslots', [])
-            latest_slot = market_data.get('latest_timeslot', 'No data')
+            # Get info about what data we have
+            latest_slot = market_data.get('latest_timeslot', 'Unknown')
+            api_info = market_data.get('api_info', {})
             
-            if isinstance(timeslots_data, list) and len(timeslots_data) > 0:
-                recent_slots = timeslots_data[-5:] if len(timeslots_data) >= 5 else timeslots_data
-            else:
-                recent_slots = "No timeslot data available"
-            
-            # Build comprehensive data summary
+            # Build data summary
             data_summary = f"""
-            OPTIONS DATA ANALYSIS REQUEST
+            OPTIONS DATA ANALYSIS - LATEST AVAILABLE DATA
             
-            Data Collection Date: {market_data.get('fetch_date', 'Unknown')} 
-            Data Collection Time: {market_data.get('actual_fetch_time', 'Unknown')}
-            Latest Available Timeslot: {latest_slot}
+            API Request Made At: {api_info.get('request_made_at', 'Unknown')}
+            Latest Data Point: {latest_slot}
             Successful Endpoints: {sum([market_data.get(f'{x}_status', False) for x in ['heatmap', 'strike', 'exp', 'depth', 'slots']])} out of 5
             
             Available Data:
@@ -256,10 +218,10 @@ class handler(BaseHTTPRequestHandler):
             - Strike Breakdown: {'✓' if market_data.get('breakdown_by_strike') else '✗'}
             - Expiration Breakdown: {'✓' if market_data.get('breakdown_by_expiration') else '✗'}
             - Market Depth: {'✓' if market_data.get('depthview') else '✗'}
-            - Timeslots: {'✓' if market_data.get('intraday_timeslots') else '✗'}
+            - Timeslots: {len(market_data.get('intraday_timeslots', [])) if market_data.get('intraday_timeslots') else 0} slots available
             """
             
-            # Add available data to summary
+            # Add available data
             if market_data.get('heatmap_gamma'):
                 data_summary += f"\n\n1. GAMMA HEATMAP DATA:\n{json.dumps(market_data.get('heatmap_gamma'), indent=2)[:1000]}"
             
@@ -276,33 +238,33 @@ class handler(BaseHTTPRequestHandler):
                 data_summary += f"\n\n5. MARKET DEPTH:\n{json.dumps(market_data.get('depthview'), indent=2)[:1000]}"
             
             prompt = f"""
-            Analyze the available SPX options market data for July 11, 2025. Focus on options positioning and flow patterns.
+            Analyze the LATEST AVAILABLE SPX options market data. Don't worry about what date this data is from - just analyze what patterns and insights it shows.
             
             {data_summary}
             
-            Based on the AVAILABLE data, please provide:
+            Based on whatever data is available, provide analysis of:
             
-            1. **GAMMA ANALYSIS** (if gamma heatmap available)
-               - Key gamma concentration levels
+            1. **GAMMA POSITIONING** (if gamma data available)
+               - Key gamma concentration levels visible in the data
                - Positive/negative gamma zones
-               - Potential pinning or acceleration levels
+               - Potential support/resistance from gamma
             
-            2. **CHARM ANALYSIS** (if charm heatmap available)
-               - Time decay impacts across strikes
-               - How positioning may shift through the day
+            2. **CHARM FLOW** (if charm data available)
+               - Time decay patterns across strikes
+               - Key charm flip points
             
-            3. **OPTIONS FLOW INSIGHTS**
-               - What the available data reveals about positioning
-               - Any notable patterns or concentrations
+            3. **OPTIONS STRUCTURE INSIGHTS**
+               - What the available data reveals about market positioning
+               - Put/call imbalances
+               - Key strikes with heavy interest
+            
+            4. **TRADING IMPLICATIONS**
+               - What levels appear important based on the options data
+               - Potential pinning or acceleration zones
                - Directional bias from the options structure
             
-            4. **KEY LEVELS & EXPECTATIONS**
-               - Important strikes based on gamma/charm
-               - Expected behavior around these levels
-               - Near-term outlook based on options positioning
-            
-            Note: Analyzing data for July 2025. If data appears to be from a previous day, note this but still provide analysis.
-            Focus on the heatmap data which appears to be working correctly.
+            Focus on the patterns and levels shown in the data. Don't reference specific dates unless they're clearly shown in the data.
+            Work with whatever endpoints provided data successfully.
             """
             
             # Call Anthropic API
@@ -331,12 +293,4 @@ class handler(BaseHTTPRequestHandler):
             return result['content'][0]['text']
             
         except Exception as e:
-            error_summary = f"""
-            Analysis Error: {str(e)}
-            
-            Data Summary: Successfully fetched data from {sum([market_data.get(f'{x}_status', False) for x in ['heatmap', 'strike', 'exp', 'depth', 'slots']])} out of 5 endpoints.
-            
-            Errors encountered:
-            {chr(10).join(market_data.get('errors', [])) if market_data.get('errors') else 'No specific errors logged'}
-            """
-            return error_summary
+            return f"Analysis Error: {str(e)}"
