@@ -1,345 +1,287 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>SPX Market Analyzer</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #0a0a0a;
-            color: #ffffff;
-        }
+from http.server import BaseHTTPRequestHandler
+import json
+import os
+from datetime import datetime
+import urllib.request
+import urllib.parse
+
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
         
-        h1 {
-            color: #ffffff;
-            text-align: center;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            text-align: center;
-            color: #888;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        
-        .status {
-            text-align: center;
-            padding: 12px 24px;
-            margin: 20px auto;
-            border-radius: 25px;
-            font-weight: 500;
-            display: inline-block;
-            width: auto;
-        }
-        
-        .status-container {
-            text-align: center;
-            margin: 20px 0;
-        }
-        
-        .loading { 
-            background: #ffa500;
-            color: #000;
-            animation: pulse 1.5s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.7; }
-            100% { opacity: 1; }
-        }
-        
-        .success { 
-            background: #00ff88;
-            color: #000;
-        }
-        
-        .error { 
-            background: #ff3b3b;
-            color: white;
-        }
-        
-        button {
-            display: block;
-            margin: 20px auto;
-            padding: 14px 32px;
-            font-size: 16px;
-            font-weight: 500;
-            background: #1d4ed8;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        button:hover {
-            background: #2563eb;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(29, 78, 216, 0.4);
-        }
-        
-        button:active {
-            transform: translateY(0);
-        }
-        
-        .analysis {
-            background: #1a1a1a;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            margin: 20px 0;
-            border: 1px solid #333;
-            min-height: 300px;
-        }
-        
-        .analysis-content {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            line-height: 1.8;
-            font-size: 15px;
-            color: #e0e0e0;
-        }
-        
-        .data-info {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 16px;
-            font-size: 13px;
-            color: #8b949e;
-            font-family: 'Monaco', 'Menlo', monospace;
-        }
-        
-        .data-info strong {
-            color: #58a6ff;
-        }
-        
-        .time {
-            text-align: center;
-            color: #666;
-            margin: 10px 0;
-            font-size: 14px;
-        }
-        
-        .footer {
-            text-align: center;
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #333;
-            color: #666;
-            font-size: 13px;
-        }
-        
-        .market-status {
-            text-align: center;
-            margin: 15px 0;
-            font-size: 14px;
-        }
-        
-        .market-open {
-            color: #00ff88;
-        }
-        
-        .market-closed {
-            color: #ff6b6b;
-        }
-        
-        .loading-spinner {
-            text-align: center;
-            padding: 50px;
-            color: #666;
-        }
-        
-        .error-message {
-            background: #2d1f1f;
-            border: 1px solid #ff3b3b;
-            color: #ff6b6b;
-            padding: 16px;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-        
-        .endpoint-status {
-            margin-top: 8px;
-            font-size: 12px;
-            color: #8b949e;
-        }
-        
-        .api-errors {
-            margin-top: 8px;
-            color: #ff6b6b;
-            font-size: 12px;
-        }
-    </style>
-</head>
-<body>
-    <h1>🎯 SPX Options Market Analyzer</h1>
-    <div class="subtitle">Real-time options flow analysis powered by AI</div>
-    
-    <div class="market-status" id="marketStatus"></div>
-    
-    <div class="status-container">
-        <div id="status" class="status loading">Initializing...</div>
-    </div>
-    
-    <button onclick="fetchAnalysis()">🔄 Refresh Analysis</button>
-    
-    <div class="time" id="time"></div>
-    
-    <div id="analysis" class="analysis">
-        <div class="loading-spinner">
-            Loading market analysis...<br>
-            <small>This may take a few moments</small>
-        </div>
-    </div>
-    
-    <div class="footer">
-        <p>Auto-refreshes every 10 minutes from 7:00 AM - 4:00 PM EST</p>
-        <p>Data provided by OptionsDepth • Analysis by Claude AI</p>
-    </div>
-    
-    <script>
-        let autoRefreshInterval;
-        
-        function checkMarketStatus() {
-            const now = new Date();
-            const easternTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-            const hours = easternTime.getHours();
-            const minutes = easternTime.getMinutes();
-            const day = easternTime.getDay();
+        try:
+            # Get API keys
+            ANTHROPIC_KEY = os.environ.get('ANTHROPIC_API_KEY')
+            OPTIONS_KEY = os.environ.get('OPTIONSDEPTH_API_KEY')
             
-            const marketStatusEl = document.getElementById('marketStatus');
+            # Fetch data from ALL 5 endpoints
+            market_data = self.fetch_all_optionsdepth_data(OPTIONS_KEY)
             
-            // Check if weekend
-            if (day === 0 || day === 6) {
-                marketStatusEl.innerHTML = '<span class="market-closed">🔴 Weekend - No Updates</span>';
-                return false;
+            # Generate analysis based on options data patterns
+            analysis = self.generate_options_analysis(market_data, ANTHROPIC_KEY)
+            
+            response = {
+                'success': True,
+                'timestamp': datetime.now().isoformat(),
+                'est_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'data_fetched': {
+                    'heatmap': market_data.get('heatmap_status', False),
+                    'breakdown_strike': market_data.get('strike_status', False),
+                    'breakdown_exp': market_data.get('exp_status', False),
+                    'depthview': market_data.get('depth_status', False),
+                    'timeslots': market_data.get('slots_status', False)
+                },
+                'errors': market_data.get('errors', []),
+                'analysis': analysis
             }
             
-            // Check if between 7 AM and 4 PM EST
-            if (hours >= 7 && hours < 16) {
-                marketStatusEl.innerHTML = '<span class="market-open">🟢 Analysis Active (7 AM - 4 PM EST)</span>';
-                return true;
-            } else {
-                marketStatusEl.innerHTML = '<span class="market-closed">🔴 Analysis Paused (Resumes 7 AM EST)</span>';
-                return false;
+        except Exception as e:
+            response = {
+                'success': False,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
             }
+        
+        self.wfile.write(json.dumps(response).encode())
+    
+    def fetch_all_optionsdepth_data(self, api_key):
+        """Fetch data from ALL 5 OptionDepth endpoints"""
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_datetime = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        
+        all_data = {
+            'fetch_date': current_date,
+            'fetch_time': current_datetime,
+            'errors': []
         }
         
-        async function fetchAnalysis() {
-            const statusEl = document.getElementById('status');
-            const analysisEl = document.getElementById('analysis');
-            const timeEl = document.getElementById('time');
-            
-            statusEl.className = 'status loading';
-            statusEl.textContent = 'Fetching latest market data...';
-            
-            try {
-                const response = await fetch('/api/analyze');
-                const data = await response.json();
-                
-                if (data.success) {
-                    statusEl.className = 'status success';
-                    statusEl.textContent = '✅ Analysis updated successfully';
-                    
-                    // Format timestamps
-                    let dataTimestamp = data.est_time || 'Unknown';
-                    
-                    // Show which endpoints worked
-                    let endpointStatus = '';
-                    if (data.data_fetched) {
-                        endpointStatus = `
-                            <div class="endpoint-status">
-                                <strong>Data Sources:</strong> 
-                                Heatmap: ${data.data_fetched.heatmap ? '✓' : '✗'} | 
-                                Strikes: ${data.data_fetched.breakdown_strike ? '✓' : '✗'} | 
-                                Expirations: ${data.data_fetched.breakdown_exp ? '✓' : '✗'} | 
-                                Depth: ${data.data_fetched.depthview ? '✓' : '✗'} | 
-                                Timeslots: ${data.data_fetched.timeslots ? '✓' : '✗'}
-                            </div>
-                        `;
-                    }
-                    
-                    // Show any errors
-                    let errorInfo = '';
-                    if (data.errors && data.errors.length > 0) {
-                        errorInfo = `<div class="api-errors"><strong>API Issues:</strong><br>${data.errors.join('<br>')}</div>`;
-                    }
-                    
-                    analysisEl.innerHTML = `
-                        <div class="data-info">
-                            <strong>Data Time:</strong> ${dataTimestamp}<br>
-                            <strong>Analysis Generated:</strong> ${new Date().toLocaleTimeString('en-US', {
-                                timeZone: 'America/New_York',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit'
-                            })} EST
-                            ${endpointStatus}
-                            ${errorInfo}
-                        </div>
-                        <div class="analysis-content">${data.analysis}</div>
-                    `;
-                    
-                    timeEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
-                } else {
-                    statusEl.className = 'status error';
-                    statusEl.textContent = '❌ Error: ' + (data.error || 'Unknown error');
-                    
-                    analysisEl.innerHTML = `
-                        <div class="error-message">
-                            <strong>Error:</strong> ${data.error || 'Failed to fetch analysis'}<br>
-                            <small>Please try again or check the console for details.</small>
-                        </div>
-                    `;
+        # 1. HEATMAP API - Get both Gamma and Charm
+        for heatmap_type in ['gamma', 'charm']:
+            try:
+                url = "https://api.optionsdepth.com/options-depth-api/v1/heatmap/"
+                params = {
+                    "model": "daily",
+                    "ticker": "SPX",
+                    "date": current_date,
+                    "type": heatmap_type,
+                    "key": api_key
                 }
-            } catch (error) {
-                statusEl.className = 'status error';
-                statusEl.textContent = '❌ Connection failed';
                 
-                analysisEl.innerHTML = `
-                    <div class="error-message">
-                        <strong>Connection Error:</strong> ${error.message}<br>
-                        <small>Please check your internet connection and try again.</small>
-                    </div>
-                `;
-                
-                console.error('Fetch error:', error);
-            }
-        }
+                full_url = url + "?" + urllib.parse.urlencode(params)
+                req = urllib.request.Request(full_url)
+                response = urllib.request.urlopen(req, timeout=15)
+                data = json.loads(response.read().decode('utf-8'))
+                all_data[f'heatmap_{heatmap_type}'] = data
+                all_data['heatmap_status'] = True
+            except Exception as e:
+                all_data['errors'].append(f"Heatmap {heatmap_type}: {str(e)}")
         
-        function setupAutoRefresh() {
-            // Clear any existing interval
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
+        # 2. BREAKDOWN BY STRIKE API
+        try:
+            url = "https://api.optionsdepth.com/options-depth-api/v1/breakdown-by-strike/"
+            params = {
+                "date": current_date,
+                "ticker": "SPX",
+                "mode": "net",
+                "model": "intraday",
+                "metric": "DEX",
+                "option_type": "C",
+                "customer_type": "procust",
+                "expiration_type": "range",
+                "expiration_range_start": current_date,
+                "expiration_range_end": current_date,
+                "date_time": current_datetime,
+                "with_markers": "true",
+                "key": api_key
             }
             
-            // Set up auto-refresh every 10 minutes
-            autoRefreshInterval = setInterval(() => {
-                if (checkMarketStatus()) {
-                    console.log('Auto-refreshing...');
-                    fetchAnalysis();
-                }
-            }, 600000); // 10 minutes
-        }
+            full_url = url + "?" + urllib.parse.urlencode(params)
+            req = urllib.request.Request(full_url)
+            response = urllib.request.urlopen(req, timeout=15)
+            all_data['breakdown_by_strike'] = json.loads(response.read().decode('utf-8'))
+            all_data['strike_status'] = True
+        except Exception as e:
+            all_data['errors'].append(f"Breakdown Strike: {str(e)}")
         
-        // Initialize on page load
-        window.onload = function() {
-            checkMarketStatus();
-            fetchAnalysis();
-            setupAutoRefresh();
+        # 3. BREAKDOWN BY EXPIRATION API
+        try:
+            url = "https://api.optionsdepth.com/options-depth-api/v1/breakdown-by-expiration/"
+            params = {
+                "date": current_date,
+                "ticker": "SPX",
+                "mode": "net",
+                "model": "intraday",
+                "option_type": "C",
+                "metric": "DEX",
+                "customer_type": "procust_posn",
+                "expiration_type": "specific",
+                "expiration_dates": f"{current_date}:SPXW",
+                "expiration_range_start": current_date,
+                "expiration_range_end": current_date,
+                "lower_strike_price": "200",
+                "upper_strike_price": "12000",
+                "date_time": current_datetime,
+                "key": api_key
+            }
             
-            // Update market status every minute
-            setInterval(checkMarketStatus, 60000);
-        };
-    </script>
-</body>
-</html>
+            full_url = url + "?" + urllib.parse.urlencode(params)
+            req = urllib.request.Request(full_url)
+            response = urllib.request.urlopen(req, timeout=15)
+            all_data['breakdown_by_expiration'] = json.loads(response.read().decode('utf-8'))
+            all_data['exp_status'] = True
+        except Exception as e:
+            all_data['errors'].append(f"Breakdown Expiration: {str(e)}")
+        
+        # 4. DEPTHVIEW API
+        try:
+            url = "https://api.optionsdepth.com/options-depth-api/v1/depthview/"
+            params = {
+                "date": current_date,
+                "ticker": "SPX",
+                "mode": "net",
+                "model": "intraday",
+                "option_type": "C",
+                "metric": "DEX",
+                "customer_type": "procust",
+                "expiration_type": "range",
+                "expiration_range_start": current_date,
+                "expiration_range_end": current_date,
+                "date_time": current_datetime,
+                "key": api_key
+            }
+            
+            full_url = url + "?" + urllib.parse.urlencode(params)
+            req = urllib.request.Request(full_url)
+            response = urllib.request.urlopen(req, timeout=15)
+            all_data['depthview'] = json.loads(response.read().decode('utf-8'))
+            all_data['depth_status'] = True
+        except Exception as e:
+            all_data['errors'].append(f"Depthview: {str(e)}")
+        
+        # 5. INTRADAY TIMESLOTS API
+        try:
+            url = "https://api.optionsdepth.com/options-depth-api/v1/intraday-timeslots/"
+            params = {
+                "date": current_date,
+                "key": api_key
+            }
+            
+            full_url = url + "?" + urllib.parse.urlencode(params)
+            req = urllib.request.Request(full_url)
+            response = urllib.request.urlopen(req, timeout=15)
+            all_data['intraday_timeslots'] = json.loads(response.read().decode('utf-8'))
+            all_data['slots_status'] = True
+        except Exception as e:
+            all_data['errors'].append(f"Timeslots: {str(e)}")
+        
+        return all_data
+    
+    def generate_options_analysis(self, market_data, api_key):
+        """Generate analysis based purely on options data patterns"""
+        try:
+            # Safely handle timeslots data
+            timeslots_data = market_data.get('intraday_timeslots', [])
+            if isinstance(timeslots_data, list) and len(timeslots_data) > 0:
+                recent_slots = timeslots_data[-5:] if len(timeslots_data) >= 5 else timeslots_data
+            else:
+                recent_slots = "No timeslot data available"
+            
+            # Build comprehensive data summary
+            data_summary = f"""
+            OPTIONS DATA ANALYSIS REQUEST
+            
+            Data Collection Time: {market_data.get('fetch_time', 'Unknown')}
+            Successful Endpoints: {sum([market_data.get(f'{x}_status', False) for x in ['heatmap', 'strike', 'exp', 'depth', 'slots']])} out of 5
+            
+            Available Data:
+            - Gamma Heatmap: {'✓' if market_data.get('heatmap_gamma') else '✗'}
+            - Charm Heatmap: {'✓' if market_data.get('heatmap_charm') else '✗'}
+            - Strike Breakdown: {'✓' if market_data.get('breakdown_by_strike') else '✗'}
+            - Expiration Breakdown: {'✓' if market_data.get('breakdown_by_expiration') else '✗'}
+            - Market Depth: {'✓' if market_data.get('depthview') else '✗'}
+            
+            API Errors: {', '.join(market_data.get('errors', [])) if market_data.get('errors') else 'None'}
+            """
+            
+            # Add available data to summary
+            if market_data.get('heatmap_gamma'):
+                data_summary += f"\n\n1. GAMMA HEATMAP DATA:\n{json.dumps(market_data.get('heatmap_gamma'), indent=2)[:800]}"
+            
+            if market_data.get('heatmap_charm'):
+                data_summary += f"\n\n2. CHARM HEATMAP DATA:\n{json.dumps(market_data.get('heatmap_charm'), indent=2)[:800]}"
+            
+            if market_data.get('breakdown_by_strike'):
+                data_summary += f"\n\n3. STRIKE BREAKDOWN:\n{json.dumps(market_data.get('breakdown_by_strike'), indent=2)[:800]}"
+            
+            if market_data.get('breakdown_by_expiration'):
+                data_summary += f"\n\n4. EXPIRATION BREAKDOWN:\n{json.dumps(market_data.get('breakdown_by_expiration'), indent=2)[:800]}"
+            
+            if market_data.get('depthview'):
+                data_summary += f"\n\n5. MARKET DEPTH:\n{json.dumps(market_data.get('depthview'), indent=2)[:800]}"
+            
+            prompt = f"""
+            Analyze the available SPX options market data. Focus ONLY on what the options data reveals.
+            
+            {data_summary}
+            
+            Based on the AVAILABLE data, please provide analysis of:
+            
+            1. **OPTIONS POSITIONING INSIGHTS**
+               - What the available data shows about market positioning
+               - Key strikes or levels revealed in the data
+               - Any notable patterns or concentrations
+            
+            2. **DEALER/MARKET MAKER IMPLICATIONS**
+               - What can be inferred about dealer positioning
+               - Potential hedging flows or pressures
+            
+            3. **TIME DECAY & FLOWS**
+               - If charm data available, analyze time decay impacts
+               - Options flow patterns visible in the data
+            
+            4. **KEY LEVELS & EXPECTATIONS**
+               - Important strikes based on the data
+               - What the options market structure suggests
+            
+            Note: Work with whatever data is available. If some endpoints failed, focus your analysis on the successful data points.
+            Be specific about what you can determine from the available data.
+            """
+            
+            # Call Anthropic API
+            url = "https://api.anthropic.com/v1/messages"
+            
+            headers = {
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            }
+            
+            data = json.dumps({
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 1200,
+                "temperature": 0.3,
+                "messages": [{
+                    "role": "user",
+                    "content": prompt
+                }]
+            }).encode('utf-8')
+            
+            req = urllib.request.Request(url, data=data, headers=headers)
+            response = urllib.request.urlopen(req, timeout=20)
+            result = json.loads(response.read().decode('utf-8'))
+            
+            return result['content'][0]['text']
+            
+        except Exception as e:
+            error_summary = f"""
+            Analysis Error: {str(e)}
+            
+            Data Summary: Successfully fetched data from {sum([market_data.get(f'{x}_status', False) for x in ['heatmap', 'strike', 'exp', 'depth', 'slots']])} out of 5 endpoints.
+            
+            Errors encountered:
+            {chr(10).join(market_data.get('errors', [])) if market_data.get('errors') else 'No specific errors logged'}
+            """
+            return error_summary
