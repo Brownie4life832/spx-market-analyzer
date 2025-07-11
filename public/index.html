@@ -190,47 +190,34 @@
     </div>
     
     <div class="footer">
-        <p>Auto-refreshes every 10 minutes during market hours (9:30 AM - 4:00 PM EST)</p>
+        <p>Auto-refreshes every 10 minutes from 7:00 AM - 4:00 PM EST</p>
         <p>Data provided by OptionsDepth • Analysis by Claude AI</p>
     </div>
     
     <script>
         let autoRefreshInterval;
         
-       if (data.success) {
-    statusEl.className = 'status success';
-    statusEl.textContent = '✅ Analysis updated successfully';
-    
-    // Use the EST time from the backend
-    let dataTimestamp = data.est_time || 'Unknown';
-    let spotPrice = data.spot_price || 'Unknown';
-    
-    analysisEl.innerHTML = `
-        <div class="data-info">
-            <strong>SPX Price:</strong> ${spotPrice}<br>
-            <strong>Data Time:</strong> ${dataTimestamp}<br>
-            <strong>Analysis Generated:</strong> ${new Date().toLocaleTimeString('en-US', {
-                timeZone: 'America/New_York',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            })} EST
-        </div>
-        <div class="analysis-content">${data.analysis}</div>
-    `;
-    
-    timeEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
-}
+        function checkMarketStatus() {
+            const now = new Date();
+            const easternTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+            const hours = easternTime.getHours();
+            const minutes = easternTime.getMinutes();
+            const day = easternTime.getDay();
             
-            // Check market hours (9:30 AM - 4:00 PM EST)
-            const marketOpen = hours > 9 || (hours === 9 && minutes >= 30);
-            const marketClose = hours < 16;
+            const marketStatusEl = document.getElementById('marketStatus');
             
-            if (marketOpen && marketClose) {
-                marketStatusEl.innerHTML = '<span class="market-open">🟢 Market Open</span>';
+            // Check if weekend
+            if (day === 0 || day === 6) {
+                marketStatusEl.innerHTML = '<span class="market-closed">🔴 Weekend - No Updates</span>';
+                return false;
+            }
+            
+            // Check if between 7 AM and 4 PM EST
+            if (hours >= 7 && hours < 16) {
+                marketStatusEl.innerHTML = '<span class="market-open">🟢 Analysis Active (7 AM - 4 PM EST)</span>';
                 return true;
             } else {
-                marketStatusEl.innerHTML = '<span class="market-closed">🔴 Market Closed</span>';
+                marketStatusEl.innerHTML = '<span class="market-closed">🔴 Analysis Paused (Resumes 7 AM EST)</span>';
                 return false;
             }
         }
@@ -251,21 +238,13 @@
                     statusEl.className = 'status success';
                     statusEl.textContent = '✅ Analysis updated successfully';
                     
-                    // Format the data timestamp if available
-                    let dataTimestamp = 'Unknown';
-                    if (data.data_timestamp) {
-                        const dt = new Date(data.data_timestamp);
-                        dataTimestamp = dt.toLocaleTimeString('en-US', { 
-                            timeZone: 'America/New_York',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                        }) + ' EST';
-                    }
+                    // Format timestamps
+                    let dataTimestamp = data.est_time || 'Unknown';
+                    let spotPrice = data.spot_price || 'Unknown';
                     
                     analysisEl.innerHTML = `
                         <div class="data-info">
-                            <strong>Data Fetched:</strong> ${dataTimestamp}<br>
+                            <strong>Data Time:</strong> ${dataTimestamp}<br>
                             <strong>Analysis Generated:</strong> ${new Date().toLocaleTimeString('en-US', {
                                 timeZone: 'America/New_York',
                                 hour: '2-digit',
@@ -318,13 +297,15 @@
             }, 600000); // 10 minutes
         }
         
-        // Initialize
-        checkMarketStatus();
-        fetchAnalysis();
-        setupAutoRefresh();
-        
-        // Update market status every minute
-        setInterval(checkMarketStatus, 60000);
+        // Initialize on page load
+        window.onload = function() {
+            checkMarketStatus();
+            fetchAnalysis();
+            setupAutoRefresh();
+            
+            // Update market status every minute
+            setInterval(checkMarketStatus, 60000);
+        };
     </script>
 </body>
 </html>
