@@ -166,6 +166,18 @@
             border-radius: 8px;
             margin: 20px 0;
         }
+        
+        .endpoint-status {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #8b949e;
+        }
+        
+        .api-errors {
+            margin-top: 8px;
+            color: #ff6b6b;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -240,7 +252,27 @@
                     
                     // Format timestamps
                     let dataTimestamp = data.est_time || 'Unknown';
-                    let spotPrice = data.spot_price || 'Unknown';
+                    
+                    // Show which endpoints worked
+                    let endpointStatus = '';
+                    if (data.data_fetched) {
+                        endpointStatus = `
+                            <div class="endpoint-status">
+                                <strong>Data Sources:</strong> 
+                                Heatmap: ${data.data_fetched.heatmap ? '✓' : '✗'} | 
+                                Strikes: ${data.data_fetched.breakdown_strike ? '✓' : '✗'} | 
+                                Expirations: ${data.data_fetched.breakdown_exp ? '✓' : '✗'} | 
+                                Depth: ${data.data_fetched.depthview ? '✓' : '✗'} | 
+                                Timeslots: ${data.data_fetched.timeslots ? '✓' : '✗'}
+                            </div>
+                        `;
+                    }
+                    
+                    // Show any errors
+                    let errorInfo = '';
+                    if (data.errors && data.errors.length > 0) {
+                        errorInfo = `<div class="api-errors"><strong>API Issues:</strong><br>${data.errors.join('<br>')}</div>`;
+                    }
                     
                     analysisEl.innerHTML = `
                         <div class="data-info">
@@ -251,6 +283,8 @@
                                 minute: '2-digit',
                                 second: '2-digit'
                             })} EST
+                            ${endpointStatus}
+                            ${errorInfo}
                         </div>
                         <div class="analysis-content">${data.analysis}</div>
                     `;
