@@ -1,3 +1,4 @@
+```python
 from http.server import BaseHTTPRequestHandler
 import json
 import os
@@ -121,3 +122,4 @@ class handler(BaseHTTPRequestHandler):
             
         except Exception as e:
             return f"AI Analysis Error: {str(e)}"
+```
