@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SPX Market Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .loading { background: #ffeaa7; }
+        .success { background: #55efc4; }
+        .error { background: #ff7675; color: white; }
+        button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 30px;
+            font-size: 16px;
+            background: #0984e3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background: #74b9ff; }
+        .analysis {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        .time {
+            text-align: center;
+            color: #666;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 SPX Options Market Analyzer</h1>
+    
+    <div id="status" class="status loading">Loading...</div>
+    
+    <button onclick="fetchAnalysis()">🔄 Refresh Analysis</button>
+    
+    <div class="time" id="time"></div>
+    
+    <div id="analysis" class="analysis">
+        Fetching market analysis...
+    </div>
+    
+    <script>
+        async function fetchAnalysis() {
+            const statusEl = document.getElementById('status');
+            const analysisEl = document.getElementById('analysis');
+            const timeEl = document.getElementById('time');
+            
+            statusEl.className = 'status loading';
+            statusEl.textContent = 'Fetching latest analysis...';
+            
+            try {
+                const response = await fetch('/api/analyze');
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusEl.className = 'status success';
+                    statusEl.textContent = '✅ Analysis updated successfully';
+                    analysisEl.textContent = data.analysis;
+                    timeEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+                } else {
+                    statusEl.className = 'status error';
+                    statusEl.textContent = '❌ Error: ' + data.error;
+                }
+            } catch (error) {
+                statusEl.className = 'status error';
+                statusEl.textContent = '❌ Failed to connect';
+                analysisEl.textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        // Fetch on load
+        fetchAnalysis();
+        
+        // Auto-refresh every 10 minutes
+        setInterval(fetchAnalysis, 600000);
+    </script>
+</body>
+</html>
